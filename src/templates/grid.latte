@@ -1,0 +1,564 @@
+{**
+ * GridControl template – all CSS classes come from $theme (Theme instance).
+ * No hardcoded Bootstrap or Tailwind classes here.
+ **}
+
+<form
+    id="phx-grid-form-{$uniqueId}"
+    n:class="$ajaxEnabled ? 'ajax'"
+    action="{link filter!}"
+    method="post"
+></form>
+
+<div class="phx-grid-wrapper" data-datagrid data-grid-id="{$uniqueId}"{if $resizable} data-resizable{/if}{if $reorderable} data-reorderable{/if}{if $showColumnToggle} data-coltoggle{/if}{if $showPresets} data-presets{/if}>
+
+    {* ── TOOLBAR ─────────────────────────────────────────────────────────── *}
+    {snippet toolbar}
+    {if $showToolbar}
+    <div class="phx-grid-header{if $theme->toolbarWrapper !== ''} {$theme->toolbarWrapper}{/if}">
+    <div class="{$theme->toolbar} phx-grid-toolbar-gap">
+
+        {if $showPresets}
+        <div class="{$theme->presetGroup} phx-grid-preset-group">
+            <select
+                class="{$theme->presetSelect} phx-grid-preset-select"
+                data-preset-base-url="{link preset!, id => '__PRESET__'}"
+            >
+                <option value="_none" {if $activePreset === '_none'}selected{/if}>{$texts['presetNone']}</option>
+                {foreach $presets as $preset}
+                <option
+                    value="{$preset->id}"
+                    {if $preset->id === $activePreset}selected{/if}
+                >{$preset->name}{if $preset->isDefault} ★{/if}</option>
+                {/foreach}
+            </select>
+            <div class="btn-group phx-grid-preset-actions" style="position:relative" data-active-preset="{$activePreset}">
+                <button
+                    type="button"
+                    class="{$theme->presetSaveBtn} phx-grid-preset-save"
+                    data-preset-action="save"
+                    data-url="{link presetSave!}"
+                    data-save-as-url="{link presetSaveAs!}"
+                    data-save-as-prompt="{$texts['presetNamePrompt']}"
+                    title="{$texts['presetSave']}"
+                >{$theme->iconPresetSave|noescape} {$texts['presetSave']}</button>
+                <button
+                    type="button"
+                    class="{$theme->presetSaveSplitBtn}"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                ><span class="visually-hidden">Toggle Dropdown</span></button>
+                <ul class="{$theme->presetDropdown}" style="display:none">
+                    {var $noPreset = $activePreset === '_none' || $activePreset === ''}
+                    <li><button type="button" class="{$theme->presetDropdownItem}" data-preset-action="saveAs" data-url="{link presetSaveAs!}" data-prompt="{$texts['presetNamePrompt']}"><i class="bi bi-plus-lg"></i> {$texts['presetSaveAs']}</button></li>
+                    <li><button type="button" class="{$theme->presetDropdownItem}" data-preset-action="rename" data-url="{link presetRename!}" data-prompt="{$texts['presetRenamePrompt']}" {if $noPreset}disabled{/if}><i class="bi bi-pencil"></i> {$texts['presetRename']}</button></li>
+                    <li><button type="button" class="{$theme->presetDropdownItem}" data-preset-action="setDefault" data-url="{link presetDefault!}" {if $noPreset}disabled{/if}><i class="bi bi-star"></i> {$texts['presetSetDefault']}</button></li>
+                    <li><hr class="{$theme->presetDropdownDivider}"></li>
+                    <li><button type="button" class="{$theme->presetDeleteItem}" data-preset-action="delete" data-url="{link presetDelete!}" data-prompt="{$texts['presetDeleteConfirm']}" {if $noPreset}disabled{/if}><i class="bi bi-trash"></i> {$texts['presetDelete']}</button></li>
+                </ul>
+            </div>
+        </div>
+        {/if}
+
+        {if $showSearch}
+        <div class="{$theme->searchGroup}">
+            <input
+                type="text"
+                name="search"
+                form="phx-grid-form-{$uniqueId}"
+                class="{$theme->searchInput} phx-grid-search-input"
+                placeholder="{$texts['search']}"
+                value="{$search}"
+                autocomplete="off"
+            ><button
+                type="submit"
+                form="phx-grid-form-{$uniqueId}"
+                class="{$theme->searchApplyBtn}"
+            >{$theme->iconApply|noescape} {$texts['apply']}</button><a
+                n:class="$theme->searchResetBtn, $ajaxEnabled ? 'ajax'"
+                href="{link reset!}"
+            >{$theme->iconReset|noescape} {$texts['reset']}</a>
+        </div>
+        {/if}
+
+        {if $showColumnToggle}
+        <div class="phx-grid-coltoggle-wrap" style="position:relative">
+            <button
+                type="button"
+                class="{$theme->colToggleBtn}"
+                data-coltoggle-trigger
+                aria-haspopup="true"
+                aria-expanded="false"
+            >{$theme->iconColumns|noescape} {$texts['columns']}</button>
+            <div class="{$theme->colToggleDropdown}" data-coltoggle-panel style="display:none">
+                {foreach $columns as $col}
+                {if $col->isHideable()}
+                <label class="{$theme->colToggleItem}">
+                    <input
+                        type="checkbox"
+                        class="{$theme->colToggleCheck} phx-grid-coltoggle-check"
+                        value="{$col->getKey()}"
+                        {if !in_array($col->getKey(), $hiddenColumns)}checked{/if}
+                    >
+                    <span class="{$theme->colToggleLabel}">{$col->getLabel()}</span>
+                </label>
+                {/if}
+                {/foreach}
+            </div>
+        </div>
+        {/if}
+    </div>
+    </div>
+    {/if}
+    {/snippet}
+
+    {* ── TABLE ───────────────────────────────────────────────────────────── *}
+    {snippet grid}
+
+{* All inputs use form="phx-grid-form-{$uniqueId}" – the single form above the wrapper *}
+
+    {if $hasBulk && $bulkActions !== []}
+    <div class="phx-grid-bulk-bar {$theme->bulkBar}" data-bulk-text="{$texts['bulkSelected']}">
+        <span class="{$theme->bulkBarCount} phx-grid-bulk-bar-count"></span>
+        {foreach $bulkActions as $action}
+        <button
+            type="submit"
+            form="phx-grid-form-{$uniqueId}"
+            formaction="{link bulkAction!, action => $action->id}"
+            class="{$theme->bulkBarBtn} phx-grid-bulk-btn{if $action->extraClass} {$action->extraClass}{/if}"
+            disabled
+            {if $action->confirm}data-confirm="{$action->confirm}"{/if}
+        >{if $action->icon}<i class="{$action->icon}"></i> {/if}{$action->caption}</button>
+        {/foreach}
+    </div>
+    {/if}
+
+    <div class="{$theme->tableWrapper}">
+        <table n:class="$theme->table, ($tableLayout === 'fixed' || $presetWidths !== []) ? 'phx-grid-table-fixed'">
+            <colgroup>
+                {if $hasBulk}<col class="phx-grid-col-check">{/if}
+                {foreach $columns as $col}
+                <col class="phx-grid-col-{$col->getKey()}{if $sortKey === $col->getKey()} phx-grid-col-sorted{/if}{if ($multiFilters[$col->getKey()] ?? []) !== [] || ($filters[$col->getKey()] ?? '') !== '' || ($filters[$col->getKey() . '_from'] ?? '') !== '' || ($filters[$col->getKey() . '_min'] ?? '') !== ''} phx-grid-col-filtered{/if}{if in_array($col->getKey(), $hiddenColumns)} phx-grid-col-hidden{/if}" data-col-key="{$col->getKey()}">
+                {/foreach}
+            </colgroup>
+            <thead class="{$theme->thead}">
+
+                <tr>
+                    {if $hasBulk}
+                    <th class="{$theme->th} phx-grid-th-check" style="width:2rem">
+                        <input
+                            type="checkbox"
+                            class="phx-grid-check-all"
+                            title="{$texts['checkAll']}"
+                        >
+                    </th>
+                    {/if}
+                    {foreach $columns as $col}
+                    {var $thWidth = $presetWidths[$col->getKey()] ?? $col->getWidth()}
+                    <th
+                        n:class="$theme->th, 'phx-grid-col-' . $col->getKey(), $col->isSortable() ? $theme->thSortable, $sortKey === $col->getKey() ? $theme->thSorted, $col->getHeaderClass(), in_array($col->getKey(), $hiddenColumns) ? 'phx-grid-col-hidden'"
+                        {if $thWidth}style="width:{$thWidth}"{/if}
+                        data-col-key="{$col->getKey()}"
+                        {if $reorderable}draggable="true"{/if}
+                    >
+                        {if $col->isSortable()}
+                            {var $isSortedAsc  = $sortKey === $col->getKey() && $sortDir === 'ASC'}
+                            {var $isSortedDesc = $sortKey === $col->getKey() && $sortDir === 'DESC'}
+                            {var $nextOb = $isSortedAsc
+                                ? ($col->getKey() . ' desc')
+                                : ($isSortedDesc ? ($col->getKey() . ' none') : ($col->getKey() . ' asc'))}
+                            <a
+                                n:class="$theme->sortLink, $ajaxEnabled ? 'ajax'"
+                                href="{link sort!, orderBy => $nextOb}"
+                            >
+                                {$col->getLabel()}
+                                <span class="{if $sortKey === $col->getKey()}{if $sortDir === 'ASC'}{$theme->sortIconAsc}{else}{$theme->sortIconDesc}{/if}{else}{$theme->sortIconNeutral}{/if}">
+                                    {if $sortKey === $col->getKey()}
+                                        {if $sortDir === 'ASC'}{$theme->iconSortAsc|noescape}
+                                        {else}{$theme->iconSortDesc|noescape}{/if}
+                                    {else}
+                                        {$theme->iconSortNeutral|noescape}
+                                    {/if}
+                                </span>
+                            </a>
+                        {else}
+                            {$col->getLabel()}
+                        {/if}
+                        {if $resizable}<div class="phx-grid-resize-handle"></div>{/if}
+                    </th>
+                    {/foreach}
+                </tr>
+
+                {if $hasFilters}
+                <tr class="phx-grid-filter-row">
+                    {if $hasBulk}<th class="{$theme->thFilterCell}"></th>{/if}
+                    {foreach $columns as $col}
+                    <th n:class="$theme->thFilterCell, in_array($col->getKey(), $hiddenColumns) ? 'phx-grid-col-hidden'" data-col-key="{$col->getKey()}">
+                        {if $col->isFilterable()}
+                        {var $fkey = $col->getKey()}
+                        {var $ftype = $col->getFilterType()}
+
+                        {* ── Text filter ─────────────────────────────── *}
+                        {if $ftype->value === 'text'}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <input
+                                    type="text"
+                                    name="filters[{$fkey}]"
+                                    form="phx-grid-form-{$uniqueId}"
+                                    class="{$theme->filterInput}"
+                                    value="{$filters[$fkey] ?? ''}"
+                                    placeholder="{$texts['filter']}"
+                                    autocomplete="off"
+                                >
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if ($filters[$fkey] ?? '') === ''}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Select (static) ─────────────────────────── *}
+                        {elseif $ftype->value === 'select'}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <select
+                                    name="filters[{$fkey}]"
+                                    form="phx-grid-form-{$uniqueId}"
+                                    class="{$theme->filterSelectInput}"
+                                >
+                                    <option value="">{$texts['selectAll']}</option>
+                                    {foreach $col->getFilter()->options as $optVal => $optLabel}
+                                        <option value="{$optVal}" {if ($filters[$fkey] ?? '') == $optVal}selected{/if}>
+                                            {$optLabel}
+                                        </option>
+                                    {/foreach}
+                                </select>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if ($filters[$fkey] ?? '') === ''}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Select AJAX – DropDownList widget ───────── *}
+                        {elseif $ftype->value === 'select_ajax'}
+                            {var $activeLabel = $filterLabels[$fkey] ?? ''}
+                            {var $activeValue = $filters[$fkey] ?? ''}
+                            <div class="{$theme->filterDdlWrapper}">
+                                <input
+                                    type="hidden"
+                                    name="filters[{$fkey}]"
+                                    form="phx-grid-form-{$uniqueId}"
+                                    value="{$activeValue}"
+                                >
+                                <button
+                                    type="button"
+                                    class="{$theme->filterDdlTrigger} phx-grid-ddl-trigger"
+                                    data-dropdownlist
+                                    data-ajax-url="{$ddlSuggestUrls[$fkey]}"
+                                    data-limit="50"
+                                    data-cls-item="{$theme->filterDdlItem}"
+                                    data-cls-item-active="{$theme->filterDdlItemActive}"
+                                    data-cls-item-selected="{$theme->filterDdlItemSelected}"
+                                    data-cls-no-results="{$theme->filterDdlNoResults}"
+                                    data-cls-mark="{$theme->filterDdlMark}"
+                                    data-q-param="{$uniqueId}-q"
+                                    data-txt-no-results="{$texts['noData']}"
+                                    role="combobox"
+                                    aria-haspopup="listbox"
+                                    aria-expanded="false"
+                                ><span class="dropdownlist-trigger-text{if $activeLabel === ''} dropdownlist-trigger-placeholder{/if}">{if $activeLabel !== ''}{$activeLabel|noescape}{else}{$texts['selectAll']}{/if}</span><span class="dropdownlist-trigger-arrow" aria-hidden="true"></span></button>
+                                <div class="{$theme->filterDdlDropdown}" data-dropdownlist-panel style="display:none">
+                                    <div class="{$theme->filterDdlFilterRow}">
+                                        <input
+                                            type="text"
+                                            class="{$theme->filterDdlFilterInput}"
+                                            data-dropdownlist-filter
+                                            autocomplete="off"
+                                            placeholder="{$texts['ajaxFilter']}"
+                                        >
+                                    </div>
+                                    <ul role="listbox" class="dropdownlist-list"></ul>
+                                </div>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if ($filters[$fkey] ?? '') === ''}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Date range (dropdown) ───────────────────── *}
+                        {elseif $ftype->value === 'date_range'}
+                            {var $dateFrom = $filters[$fkey . '_from'] ?? ''}
+                            {var $dateTo   = $filters[$fkey . '_to']   ?? ''}
+                            {var $dateActive = $dateFrom !== '' || $dateTo !== ''}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <div class="phx-grid-ms-wrap" style="position:relative;flex:1;min-width:0">
+                                    <button
+                                        type="button"
+                                        class="{$theme->filterMsTrigger}"
+                                        data-ms-toggle
+                                        aria-haspopup="dialog"
+                                        aria-expanded="false"
+                                    ><span class="phx-grid-ms-label">
+                                        {if $dateActive}
+                                            {if $dateFrom !== ''}{$dateFrom}{else}…{/if} – {if $dateTo !== ''}{$dateTo}{else}…{/if}
+                                        {else}
+                                            {$texts['filter']}
+                                        {/if}
+                                    </span></button>
+                                    <div class="{$theme->filterMsDropdown}" data-ms-panel style="display:none">
+                                        <div class="phx-grid-range-wrap phx-grid-range-wrap--panel">
+                                            <span class="phx-grid-range-label">{$texts['dateFrom']}</span>
+                                            <input
+                                                type="date"
+                                                name="filters[{$fkey}_from]"
+                                                form="phx-grid-form-{$uniqueId}"
+                                                class="{$theme->filterInput} phx-grid-range-input"
+                                                value="{$dateFrom}"
+                                            >
+                                            <span class="phx-grid-range-label">{$texts['dateTo']}</span>
+                                            <input
+                                                type="date"
+                                                name="filters[{$fkey}_to]"
+                                                form="phx-grid-form-{$uniqueId}"
+                                                class="{$theme->filterInput} phx-grid-range-input"
+                                                value="{$dateTo}"
+                                            >
+                                        </div>
+                                        <div class="phx-grid-ms-footer">
+                                            <button type="button" class="{$theme->filterMsApplyBtn} phx-grid-ms-apply" data-ms-apply>{$texts['apply']}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}_from" data-clear-filter-also="{$fkey}_to" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if !$dateActive}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Number range (dropdown) ─────────────────── *}
+                        {elseif $ftype->value === 'number_range'}
+                            {var $numMin = $filters[$fkey . '_min'] ?? ''}
+                            {var $numMax = $filters[$fkey . '_max'] ?? ''}
+                            {var $numActive = $numMin !== '' || $numMax !== ''}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <div class="phx-grid-ms-wrap" style="position:relative;flex:1;min-width:0">
+                                    <button
+                                        type="button"
+                                        class="{$theme->filterMsTrigger}"
+                                        data-ms-toggle
+                                        aria-haspopup="dialog"
+                                        aria-expanded="false"
+                                    ><span class="phx-grid-ms-label">
+                                        {if $numActive}
+                                            {if $numMin !== ''}{$numMin}{else}…{/if} – {if $numMax !== ''}{$numMax}{else}…{/if}
+                                        {else}
+                                            {$texts['filter']}
+                                        {/if}
+                                    </span></button>
+                                    <div class="{$theme->filterMsDropdown}" data-ms-panel style="display:none">
+                                        <div class="phx-grid-range-wrap phx-grid-range-wrap--panel">
+                                            <span class="phx-grid-range-label">{$texts['numMin']}</span>
+                                            <input
+                                                type="number"
+                                                name="filters[{$fkey}_min]"
+                                                form="phx-grid-form-{$uniqueId}"
+                                                class="{$theme->filterInput} phx-grid-range-input"
+                                                value="{$numMin}"
+                                            >
+                                            <span class="phx-grid-range-label">{$texts['numMax']}</span>
+                                            <input
+                                                type="number"
+                                                name="filters[{$fkey}_max]"
+                                                form="phx-grid-form-{$uniqueId}"
+                                                class="{$theme->filterInput} phx-grid-range-input"
+                                                value="{$numMax}"
+                                            >
+                                        </div>
+                                        <div class="phx-grid-ms-footer">
+                                            <button type="button" class="{$theme->filterMsApplyBtn} phx-grid-ms-apply" data-ms-apply>{$texts['apply']}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}_min" data-clear-filter-also="{$fkey}_max" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if !$numActive}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Multi-select (checkbox dropdown) ────────── *}
+                        {elseif $ftype->value === 'multi_select'}
+                            {var $activeVals = $multiFilters[$fkey] ?? []}
+                            {var $hasActive  = $activeVals !== []}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <div class="phx-grid-ms-wrap" style="position:relative;flex:1;min-width:0">
+                                    <button
+                                        type="button"
+                                        class="{$theme->filterMsTrigger}"
+                                        data-ms-toggle
+                                        aria-haspopup="listbox"
+                                        aria-expanded="false"
+                                    ><span class="phx-grid-ms-label">
+                                        {if $hasActive}
+                                            {var $labels = []}
+                                            {foreach $col->getFilter()->options as $optVal => $optLabel}
+                                                {if in_array((string)$optVal, $activeVals)}{do $labels[] = $optLabel}{/if}
+                                            {/foreach}
+                                            {$labels[0]}{if count($labels) > 1} <span class="phx-grid-ms-more">+{count($labels) - 1}</span>{/if}
+                                        {else}
+                                            {$texts['selectAll']}
+                                        {/if}
+                                    </span></button>
+                                    <div class="{$theme->filterMsDropdown}" data-ms-panel style="display:none">
+                                        {foreach $col->getFilter()->options as $optVal => $optLabel}
+                                        {var $checked = in_array((string)$optVal, $activeVals)}
+                                        <label class="{$theme->filterMsItem}">
+                                            <input
+                                                type="checkbox"
+                                                name="mfilters[{$fkey}][]"
+                                                form="phx-grid-form-{$uniqueId}"
+                                                class="{$theme->filterMsCheck} phx-grid-ms-check"
+                                                value="{$optVal}"
+                                                {if $checked}checked{/if}
+                                            >
+                                            <span class="{$theme->filterMsLabel}">{$optLabel}</span>
+                                        </label>
+                                        {/foreach}
+                                        <div class="phx-grid-ms-footer">
+                                            <button type="button" class="{$theme->filterMsApplyBtn} phx-grid-ms-apply" data-ms-apply>{$texts['apply']}</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-ms="{$fkey}" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if !$hasActive}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+
+                        {* ── Bool (3-state select) ───────────────────── *}
+                        {elseif $ftype->value === 'bool'}
+                            {var $boolVal = $filters[$fkey] ?? ''}
+                            <div class="phx-grid-filter-cell-wrap">
+                                <select
+                                    name="filters[{$fkey}]"
+                                    form="phx-grid-form-{$uniqueId}"
+                                    class="{$theme->filterSelectInput} phx-grid-bool-filter"
+                                >
+                                    <option value="">{$texts['selectAll']}</option>
+                                    <option value="1" {if $boolVal === '1'}selected{/if}>{$texts['yes']}</option>
+                                    <option value="0" {if $boolVal === '0'}selected{/if}>{$texts['no']}</option>
+                                </select>
+                                <button type="button" class="{$theme->filterClearBtn}" data-clear-filter="{$fkey}" form="phx-grid-form-{$uniqueId}" title="Zrušit filtr" tabindex="-1" {if $boolVal === ''}disabled{/if}>{$theme->iconClear|noescape}</button>
+                            </div>
+                        {/if}
+
+                        {/if}{* isFilterable *}
+                    </th>
+                    {/foreach}
+                </tr>
+                {/if}
+
+            </thead>
+            <tbody>
+                {if $rows}
+                    {foreach $rows as $rowIndex => $row}
+                    <tr n:attr="$renderRowAttrs($row, $rowIndex)">
+                        {if $hasBulk}
+                        <td class="{$theme->td} phx-grid-td-check">
+                            <input
+                                type="checkbox"
+                                name="_selected[]"
+                                form="phx-grid-form-{$uniqueId}"
+                                value="{$row[$primaryKey]}"
+                                class="phx-grid-row-check"
+                            >
+                        </td>
+                        {/if}
+                        {foreach $columns as $col}
+                        <td n:class="$theme->td, 'phx-grid-td-' . $col->getKey(), $col->getClass(), in_array($col->getKey(), $hiddenColumns) ? 'phx-grid-col-hidden'" data-col-key="{$col->getKey()}">
+                            {$col->renderCell($row)|noescape}
+                        </td>
+                        {/foreach}
+                    </tr>
+                    {/foreach}
+                {else}
+                    <tr class="phx-grid-empty-row">
+                        <td colspan="{count($columns)}" class="{$theme->noDataCell}">
+                            {$theme->iconEmpty|noescape}
+                            {$texts['noData']}
+                        </td>
+                    </tr>
+                {/if}
+
+            {if $hasFooter}
+            <tfoot>
+                <tr class="phx-grid-footer-row">
+                    {if $hasBulk}
+                    <td class="phx-grid-td-check phx-grid-td-footer"></td>
+                    {/if}
+                    {foreach $columns as $col}
+                    <td n:class="$theme->td . ' phx-grid-td-footer', in_array($col->getKey(), $hiddenColumns) ? 'phx-grid-col-hidden'" data-col-key="{$col->getKey()}">
+                        {if $col->getFooterAggregate() !== null && isset($aggregates[$col->getKey()])}
+                            {var $aggVal = $aggregates[$col->getKey()]}
+                            {var $aggFn  = $col->getFooterAggregate()}
+                            <small class="phx-grid-footer-label text-muted">{$aggFn|upper}:</small>
+                            <strong>{$col->renderFooter($aggVal)|noescape}</strong>
+                        {/if}
+                    </td>
+                    {/foreach}
+                </tr>
+            </tfoot>
+            {/if}
+
+            </tbody>
+        </table>
+    </div>
+    {/snippet}
+
+    {* ── PAGINATION ──────────────────────────────────────────────────────── *}
+    {snippet pagination}
+    {if ($showPagination && $totalPages > 1) || $perPageOptions !== null}
+    <div class="phx-grid-footer{if $theme->paginationWrapper !== ''} {$theme->paginationWrapper}{/if}">
+    <nav class="{$theme->paginationNav}">
+        <span class="{$theme->paginationInfo}">
+            {if $showPagination && $totalPages > 1}
+            Showing
+            <strong>{($currentPage - 1) * $paginator->itemsPerPage + 1}</strong>–<strong>{min($currentPage * $paginator->itemsPerPage, $totalRows)}</strong>
+            of <strong>{$totalRows}</strong>
+            {/if}
+        </span>
+
+        <div class="phx-grid-pagination-right">
+            {if $perPageOptions !== null}
+            <div class="phx-grid-per-page">
+                <label class="phx-grid-per-page-label">{$texts['perPage']}</label>
+                <select
+                    n:class="$theme->filterSelectInput, 'phx-grid-per-page-select', $ajaxEnabled ? 'ajax'"
+                    data-perpage-url="{$perPageUrl}"
+                >
+                    {foreach $perPageOptions as $opt}
+                    <option value="{$opt}" {if $opt === $itemsPerPage}selected{/if}>{$opt}</option>
+                    {/foreach}
+                </select>
+            </div>
+            {/if}
+
+            {if $showPagination && $totalPages > 1}
+            <ul class="{$theme->paginationList}">
+
+                {define pageItem, $page, $disabled, $active, $icon}
+                <li n:class="$theme->pageItem, $active ? $theme->pageItemActive, $disabled ? $theme->pageItemDisabled"
+                    {if $active}aria-current="page"{/if}>
+                    <a n:class="$theme->pageLink, $ajaxEnabled ? 'ajax'" href="{link page!, page => $page}">
+                        {if $icon}{$icon|noescape}{else}{$page}{/if}
+                    </a>
+                </li>
+                {/define}
+
+                {include pageItem, 1,              $currentPage <= 1,           false, $theme->iconFirst}
+                {include pageItem, $currentPage-1, $currentPage <= 1,           false, $theme->iconPrev}
+
+                {var $from = max(1, $currentPage - 2)}
+                {var $to   = min($totalPages, $currentPage + 2)}
+
+                {if $from > 1}
+                    <li class="{$theme->pageItem} {$theme->pageItemDisabled}"><span class="{$theme->pageLink}">…</span></li>
+                {/if}
+                {for $p = $from; $p <= $to; $p++}
+                    {include pageItem, $p, false, $p === $currentPage, null}
+                {/for}
+                {if $to < $totalPages}
+                    <li class="{$theme->pageItem} {$theme->pageItemDisabled}"><span class="{$theme->pageLink}">…</span></li>
+                {/if}
+
+                {include pageItem, $currentPage+1, $currentPage >= $totalPages, false, $theme->iconNext}
+                {include pageItem, $totalPages,    $currentPage >= $totalPages, false, $theme->iconLast}
+
+            </ul>
+            {/if}
+        </div>
+    </nav>
+    </div>
+    {/if}
+    {/snippet}
+
+</div>

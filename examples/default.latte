@@ -1,0 +1,30 @@
+{**
+ * Example template for UserPresenter:default
+ * Copy to: app/templates/User/default.latte
+ **}
+
+{block content}
+
+<div class="container-fluid py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h1 class="h4 mb-0">Users</h1>
+        <a href="{link User:create}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> Add user
+        </a>
+    </div>
+
+    {ifset $flashes}
+        {foreach $flashes as $flash}
+        <div class="alert alert-{$flash->type} alert-dismissible fade show" role="alert">
+            {$flash->message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {/foreach}
+    {/ifset}
+
+    {control userGrid}
+
+</div>
+
+{/block}
