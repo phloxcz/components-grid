@@ -117,7 +117,7 @@ final class ActionColumn extends Column
         // ── No secondary actions — just the primary button ────────────────────
         if ($this->actions === [] && $this->primaryAction !== null) {
             return '<div class="phx-grid-actions">'
-                . $this->renderLink($this->primaryAction, $row, $primaryBtnCls)
+                . $this->renderLink($this->primaryAction, $row, $this->primaryClass($primaryBtnCls))
                 . '</div>';
         }
 
@@ -129,7 +129,7 @@ final class ActionColumn extends Column
         }
 
         // ── Split button: primary + dropdown toggle ────────────────────────────
-        $primaryHtml = $this->renderLink($this->primaryAction, $row, $primaryBtnCls);
+        $primaryHtml = $this->renderLink($this->primaryAction, $row, $this->primaryClass($primaryBtnCls));
         $menuHtml    = $this->renderMenu($row, $toggleCls, $menuCls, $menuItemBase, $menuIcon, split: true);
 
         return '<div class="phx-grid-actions"><div class="btn-group">'
@@ -139,6 +139,21 @@ final class ActionColumn extends Column
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Merges the primary action's own $extraClass (set via addPrimaryAction())
+     * into the theme's base button class - same "append, don't replace" idea
+     * renderMenu() already applies per dropdown item below, just previously
+     * missing here, which silently dropped extraClass for the primary button
+     * (both call sites in renderCell() passed $primaryBtnCls straight
+     * through unmodified).
+     */
+    private function primaryClass(string $baseClass): string
+    {
+        $extraClass = $this->primaryAction['extraClass'] ?? '';
+        return trim($baseClass . ($extraClass !== '' ? ' ' . $extraClass : ''));
+    }
+
 
     private function renderMenu(
         mixed  $row,
